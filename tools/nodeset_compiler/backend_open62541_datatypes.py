@@ -17,7 +17,7 @@ def makeCIdentifier(value):
 
 # Escape C strings:
 def makeCLiteral(value):
-    return re.sub(r'(?<!\\)"', r'\\"', value.replace('\\', r'\\\\').replace('\n', r'\\n').replace('\r', r''))
+    return re.sub(r'(?<!\\)"', r'\\"', value.replace('\\', r'\\').replace('"', r'\"').replace('\n', r'\\n').replace('\r', r''))
 
 def splitStringLiterals(value, splitLength=500):
     """
@@ -45,7 +45,15 @@ def generateXmlElementCode(value, alloc=False):
     return u"UA_XMLELEMENT{}({})".format("_ALLOC" if alloc else "", splitStringLiterals(value))
 
 def generateByteStringCode(value, valueName, global_var_code, isPointer):
-    asciiarray = list(value)
+    if isinstance(value, str):
+        # PY3 returns a byte array for b64decode, while PY2 returns a string.
+        # Therefore convert it to bytes
+        asciiarray = bytearray()
+        asciiarray.extend(value)
+        asciiarray = list(asciiarray)
+    else:
+        asciiarray = list(value)
+
     asciiarraystr = str(asciiarray).rstrip(']').lstrip('[')
     cleanValueName = re.sub(r"->", "__", re.sub(r"\.", "_", valueName))
     global_var_code.append("static const UA_Byte {cleanValueName}_byteArray[{len}] = {{{data}}};".format(
@@ -58,7 +66,7 @@ def generateByteStringCode(value, valueName, global_var_code, isPointer):
 
 def generateLocalizedTextCode(value, alloc=False):
     vt = makeCLiteral(value.text)
-    return u"UA_LOCALIZEDTEXT{}(\"{}\", {})".format("_ALLOC" if alloc else "", value.locale,
+    return u"UA_LOCALIZEDTEXT{}(\"{}\", {})".format("_ALLOC" if alloc else "", '' if value.locale is None else value.locale,
                                                    splitStringLiterals(vt))
 
 def generateQualifiedNameCode(value, alloc=False,):

@@ -130,7 +130,7 @@ def sortNodes(nodeset):
 # Generate C Code #
 ###################
 
-def generateOpen62541Code(nodeset, outfilename, generate_ns0=False, internal_headers=False, typesArray=[], encode_binary_size=32000):
+def generateOpen62541Code(nodeset, outfilename, internal_headers=False, typesArray=[]):
     outfilebase = basename(outfilename)
     # Printing functions
     outfileh = codecs.open(outfilename + ".h", r"w+", encoding='utf-8')
@@ -227,18 +227,14 @@ _UA_END_DECLS
     logger.info("Writing code for nodes and references")
     functionNumber = 0
 
-    parentreftypes = getSubTypesOf(nodeset, nodeset.getNodeByBrowseName("HierarchicalReferences"))
-    parentreftypes = list(map(lambda x: x.id, parentreftypes))
-
     printed_ids = set()
     for node in sorted_nodes:
         printed_ids.add(node.id)
 
-        parentref = node.popParentRef(parentreftypes)
         if not node.hidden:
             writec("\n/* " + str(node.displayName) + " - " + str(node.id) + " */")
             code_global = []
-            code = generateNodeCode_begin(node, nodeset, generate_ns0, parentref, encode_binary_size, code_global)
+            code = generateNodeCode_begin(node, nodeset, code_global)
             if code is None:
                 writec("/* Ignored. No parent */")
                 nodeset.hide_node(node.id)
@@ -257,6 +253,10 @@ _UA_END_DECLS
             if ref.target not in printed_ids:
                 continue
             if node.hidden and nodeset.nodes[ref.target].hidden:
+                continue
+            if node.parent is not None and ref.target == node.parent.id \
+                and ref.referenceType == node.parentReference.id:
+                # Skip parent reference
                 continue
             writec(generateReferenceCode(ref))
 
@@ -295,11 +295,22 @@ UA_StatusCode retVal = UA_STATUSCODE_GOOD;""" % (outfilebase))
         nsid = nsid.replace("\"", "\\\"")
         writec("ns[" + str(i) + "] = UA_Server_addNamespace(server, \"" + nsid + "\");")
 
-    for i in range(0, functionNumber):
-        writec("retVal |= function_" + outfilebase + "_" + str(i) + "_begin(server, ns);")
+    if functionNumber > 0:
 
-    for i in reversed(range(0, functionNumber)):
-        writec("retVal |= function_" + outfilebase + "_" + str(i) + "_finish(server, ns);")
+        # concatenate method calls with "&&" operator.
+        # The first method which does not return UA_STATUSCODE_GOOD (=0) will cause aborting
+        # the remaining calls and retVal will be set to that error code.
+        writec("bool dummy = (")
+        for i in range(0, functionNumber):
+            writec("!(retVal = function_{outfilebase}_{idx}_begin(server, ns)) &&".format(
+                outfilebase=outfilebase, idx=str(i)))
+
+        for i in reversed(range(0, functionNumber)):
+            writec("!(retVal = function_{outfilebase}_{idx}_finish(server, ns)) {concat}".format(
+                outfilebase=outfilebase, idx=str(i), concat= "&&" if i>0 else ""))
+
+        # use (void)(dummy) to avoid unused variable error.
+        writec("); (void)(dummy);")
 
     writec("return retVal;\n}")
     outfileh.flush()

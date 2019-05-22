@@ -84,6 +84,17 @@ UA_Server_getConfig(UA_Server *server)
   return &server->config;
 }
 
+#ifdef UA_ENABLE_CUSTOM_NODESTORE
+void*
+UA_Server_getNodestore(UA_Server *server)
+{
+  if(!server)
+    return NULL;
+
+  return server->nsCtx;
+}
+#endif
+
 UA_StatusCode
 UA_Server_getNamespaceByName(UA_Server *server, const UA_String namespaceUri,
                              size_t* foundIndex) {
@@ -229,6 +240,10 @@ UA_Server_new() {
     /* Create Namespaces 0 and 1
      * Ns1 will be filled later with the uri from the app description */
     server->namespaces = (UA_String *)UA_Array_new(2, &UA_TYPES[UA_TYPES_STRING]);
+	if(!server->namespaces) {
+		UA_Server_delete(server);
+		return NULL;
+	}
     server->namespaces[0] = UA_STRING_ALLOC("http://opcfoundation.org/UA/");
     server->namespaces[1] = UA_STRING_NULL;
     server->namespacesSize = 2;

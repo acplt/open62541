@@ -202,6 +202,9 @@ endif()
 option(UA_ENABLE_CUSTOM_NODESTORE "Do not compile the default Nodestore implementation into the library" OFF)
 mark_as_advanced(UA_ENABLE_CUSTOM_NODESTORE)
 
+option(UA_ENABLE_NODESTORE_SWITCH "Plugin nodestore switch for dynamic handling of nodestores. UA_ENABLE_CUSTOM_NODESTORE has to be defined." OFF)
+mark_as_advanced(UA_ENABLE_NODESTORE_SWITCH)
+
 option(UA_ENABLE_PUBSUB "Enable publish/subscribe" OFF)
 mark_as_advanced(UA_ENABLE_PUBSUB)
 
@@ -334,7 +337,7 @@ mark_as_advanced(UA_BUILD_FUZZING_CORPUS)
 if(UA_BUILD_FUZZING_CORPUS)
     add_definitions(-DUA_DEBUG_DUMP_PKGS_FILE)
     set(UA_ENABLE_TYPENAMES ON CACHE STRING "" FORCE)
-    set(UA_DEBUG_DUMP_PKGS ON CACHE STRING "" FORCE)
+    #set(UA_DEBUG_DUMP_PKGS ON CACHE STRING "" FORCE)
 endif()
 
 option(UA_BUILD_OSS_FUZZ "Special build switch used in oss-fuzz" OFF)
@@ -449,7 +452,7 @@ if(NOT UA_COMPILE_AS_CXX AND (CMAKE_COMPILER_IS_GNUCC OR "x${CMAKE_C_COMPILER_ID
         if("x${CMAKE_C_COMPILER_ID}" STREQUAL "xClang" AND NOT UA_ENABLE_UNIT_TESTS_MEMCHECK)
             # Add default sanitizer settings when using clang and Debug build.
             # This allows e.g. CLion to find memory locations for SegFaults
-            message("Sanitizer enabled")
+            message(STATUS "Sanitizer enabled")
             set(SANITIZER_FLAGS "-g -fno-omit-frame-pointer -gline-tables-only -fsanitize=address -fsanitize-address-use-after-scope -fsanitize-coverage=trace-pc-guard,trace-cmp -fsanitize=leak -fsanitize=undefined")
             set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${SANITIZER_FLAGS}")
             set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${SANITIZER_FLAGS}")
@@ -655,6 +658,7 @@ set(default_plugin_headers ${PROJECT_SOURCE_DIR}/plugins/include/open62541/plugi
                            ${PROJECT_SOURCE_DIR}/plugins/include/open62541/server_config_default.h
                            ${PROJECT_SOURCE_DIR}/plugins/include/open62541/client_config_default.h
                            ${PROJECT_SOURCE_DIR}/plugins/include/open62541/plugin/securitypolicy_default.h
+                           ${PROJECT_SOURCE_DIR}/plugins/include/open62541/plugin/nodestore_default.h
 )
 
 set(default_plugin_sources ${PROJECT_SOURCE_DIR}/plugins/ua_log_stdout.c
@@ -762,6 +766,15 @@ if(UA_BUILD_FUZZING OR UA_BUILD_OSS_FUZZ)
     set(lib_sources
         ${lib_sources}
         ${PROJECT_SOURCE_DIR}/tests/fuzz/custom_memory_manager.c)
+endif()
+
+if(UA_ENABLE_NODESTORE_SWITCH)
+    list(APPEND default_plugin_headers
+         ${PROJECT_SOURCE_DIR}/plugins/include/open62541/plugin/nodestore_switch.h
+         )
+    list(APPEND default_plugin_sources
+         ${PROJECT_SOURCE_DIR}/plugins/ua_nodestore_switch.c
+         )
 endif()
 
 #########################
@@ -905,16 +918,11 @@ if (UA_ENABLE_AMALGAMATION)
                      open62541-generator-transport open62541-generator-statuscode)
 endif()
 
-if(NOT UA_NODESET_ENCODE_BINARY_SIZE)
-    set(UA_NODESET_ENCODE_BINARY_SIZE 32000)
-endif()
-
 ua_generate_nodeset(
     NAME "ns0"
     FILE ${UA_FILE_NODESETS}
     INTERNAL
     IGNORE "${PROJECT_SOURCE_DIR}/tools/nodeset_compiler/NodeID_NS0_Base.txt"
-    ENCODE_BINARY_SIZE ${UA_NODESET_ENCODE_BINARY_SIZE}
     DEPENDS_TARGET "open62541-generator-types"
 )
 

@@ -37,13 +37,9 @@ THREAD_CALLBACK(serverloop_lds) {
     return 0;
 }
 
-static void setup_lds(void) {
-    // start LDS server
-    running_lds = UA_Boolean_new();
-    *running_lds = true;
-
-    server_lds = UA_Server_new();
-    UA_ServerConfig *config_lds = UA_Server_getConfig(server_lds);
+static void configure_lds_server(UA_Server *pServer)
+{
+    UA_ServerConfig *config_lds = UA_Server_getConfig(pServer);
     UA_ServerConfig_setDefault(config_lds);
 
     config_lds->applicationDescription.applicationType = UA_APPLICATIONTYPE_DISCOVERYSERVER;
@@ -62,6 +58,15 @@ static void setup_lds(void) {
     config_lds->discovery.mdns.serverCapabilities = caps;
 #endif
     config_lds->discovery.cleanupTimeout = registerTimeout;
+}
+
+static void setup_lds(void) {
+    // start LDS server
+    running_lds = UA_Boolean_new();
+    *running_lds = true;
+
+    server_lds = UA_Server_new();
+    configure_lds_server(server_lds);
 
     UA_Server_run_startup(server_lds);
     THREAD_CREATE(server_thread_lds, serverloop_lds);
@@ -121,6 +126,22 @@ static void teardown_register(void) {
     UA_Boolean_delete(running_register);
     UA_Server_delete(server_register);
 }
+
+START_TEST(Server_new_delete) {
+    UA_Server *pServer = UA_Server_new();
+    configure_lds_server(pServer);
+    UA_Server_delete(pServer);
+}
+END_TEST
+
+START_TEST(Server_new_shutdown_delete) {
+		UA_Server *pServer = UA_Server_new();
+		configure_lds_server(pServer);
+		UA_StatusCode retval = UA_Server_run_shutdown(pServer);
+		ck_assert_uint_eq(retval, UA_STATUSCODE_GOOD);
+		UA_Server_delete(pServer);
+}
+END_TEST
 
 START_TEST(Server_register) {
     UA_Client *clientRegister = UA_Client_new();
@@ -549,6 +570,12 @@ END_TEST
 
 static Suite* testSuite_Client(void) {
     Suite *s = suite_create("Register Server and Client");
+
+    TCase *tc_new_del = tcase_create("New Delete");
+    tcase_add_test(tc_new_del, Server_new_delete);
+	tcase_add_test(tc_new_del, Server_new_shutdown_delete);
+    suite_add_tcase(s,tc_new_del);
+
     TCase *tc_register = tcase_create("RegisterServer");
     tcase_add_unchecked_fixture(tc_register, setup_lds, teardown_lds);
     tcase_add_unchecked_fixture(tc_register, setup_register, teardown_register);

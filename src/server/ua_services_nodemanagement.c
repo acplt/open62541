@@ -1118,8 +1118,8 @@ recursiveCallConstructors(UA_Server *server, UA_Session *session,
         }
 
         const UA_Node *targetType = NULL;
-        if(node->nodeClass == UA_NODECLASS_VARIABLE ||
-           node->nodeClass == UA_NODECLASS_OBJECT) {
+        if(target->nodeClass == UA_NODECLASS_VARIABLE ||
+           target->nodeClass == UA_NODECLASS_OBJECT) {
             targetType = getNodeType(server, target);
             if(!targetType) {
                 UA_NODESTORE_RELEASE(server, target);
